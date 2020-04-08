@@ -9,7 +9,6 @@ from os import path
 import config
 
 
-data_dir = ""
 
 def get_bot_info(user_df):
     """

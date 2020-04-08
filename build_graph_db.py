@@ -16,6 +16,8 @@ def add_tweet_to_graph(graph, tweet_ob):
     tweet = Node("Tweet", id=tweet_ob.id, text=tweet_ob.text, created_at=tweet_ob.created_at_datetime, lang=tweet_ob.lang)
     tweet.__primarylabel__ = "Tweet"
     tweet.__primarykey__ = "id"
+    if graph.exists(tweet):
+        return
     user = Node("User", screen_name=tweet_ob.screen_name, id=tweet_ob.user_id)
     user.__primarylabel__ = "User"
     user.__primarykey__ = "id"
@@ -53,6 +55,7 @@ def create_tweet_graph(graph):
 
     print("Starting to add tweets...")
     for tweet_file in all_tweet_files:
+        print("Adding", tweet_file)
         with gzip.open(tweet_file, 'rb') as f:
             for tweet_dict in tqdm(f):
                 try:
