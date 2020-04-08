@@ -7,21 +7,27 @@ from tweet_parser.tweet_parser_errors import NotATweetError
 from os import path
 import glob
 import gzip
-import traceback
 
 
 def create_tweet_df():
+    """
+    Creates a pandas dataframe representing all of the coronavirus tweets stored in DATA_DIR/f/*.jsonl.gz where f is in
+    DATA_FOLDERS.
+    :return: the tweet dataframe
+    """
+
     tweet_df = pd.DataFrame(
             columns=['tweet_id', 'text', 'screen_name', 'user_id', 'name', 'bio', 'creation_date', 'profile_location',
-                     'tweet_type', 'embedded_tweet', 'lang', 'hashtags', 'user_mentions', 'tweet_links', 'generator'])
+                     'tweet_type', 'embedded_tweet', 'lang', 'hashtags', 'user_mentions', 'tweet_links', 'generator'])\
+        .astype({'tweet_id': 'str', 'user_id': 'int32'})
     all_tweet_files = []
     for data_folder in config.DATA_FOLDERS:
         data_path = path.join(config.DATA_DIR, data_folder, "*.jsonl.gz")
         all_tweet_files.extend(glob.glob(data_path))
 
-    for tweet_file in tqdm(all_tweet_files[:8]):
+    for tweet_file in all_tweet_files:
         with gzip.open(tweet_file, 'rb') as f:
-            for tweet_dict in f:
+            for tweet_dict in tqdm(f):
                 try:
                     tweet = Tweet(json.loads(tweet_dict))
                     tweet_df = tweet_df.append({'tweet_id': tweet.id,
