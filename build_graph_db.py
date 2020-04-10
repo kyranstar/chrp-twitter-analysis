@@ -1,4 +1,16 @@
-import pandas as pd
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+"""Tweet json files to neo4j graph
+
+This script takes tweets downloaded into json.gz files and adds them to a neo4j graph.
+The graph has three node types: User, Tweet, and Hashtag. Users POSTS Tweets,
+Tweets MENTIONS Users, Tweets RETWEETS Tweets, Tweets REPLY_TO Tweets,
+ and Tweets TAGS Hashtags.
+
+This script requires that a neo4j graph database be running. It also requires that tweets be stored in
+.jsonl.gz files in {config.DATA_DIR}/{config.DATA_FOLDERS}/.
+"""
 from tqdm import tqdm
 import json
 import config
@@ -9,23 +21,28 @@ import glob
 import gzip
 from py2neo import Graph
 
-
-
-
 def add_tweet_to_graph(graph, tweet_ob):
     # Create tweet object if it doesn't exist, create user object if doesn't exist, create user -POSTS-> tweet
     graph.run("""MERGE (t:Tweet{id:$tweet_id})
     SET t.text = $tweet_text
     SET t.created_at = $tweet_created_at
     SET t.lang = $tweet_lang
+    SET t.links = $tweet_links
     MERGE (u:User{id:$user_id})
     SET u.screen_name = $user_screen_name
+    SET u.location = $user_location
+    SET u.followers = $user_followers
+    SET u.following = $user_following
     MERGE (u)-[r:POSTS]->(t)
     """, {"tweet_id": tweet_ob.id,
           "tweet_text": tweet_ob.text,
           "tweet_created_at": tweet_ob.created_at_datetime,
           "tweet_lang": tweet_ob.lang,
+          "tweet_links": list(set([ob['expanded_url'] for ob in tweet_ob.tweet_links])),
           "user_id": tweet_ob.user_id,
+          "user_location": tweet_ob.profile_location,
+          "user_followers": tweet_ob.follower_count,
+          "user_following": tweet_ob.following_count,
           "user_screen_name": tweet_ob.screen_name})
 
     # Create hashtag if doesn't exist, create tweet -TAGS-> hashtag
@@ -110,5 +127,5 @@ if __name__ == "__main__":
     #constraint("Tweet", "id")
     #constraint("User", "screen_name")
     #constraint("Hashtag", "name")
-    create_tweet_graph(graph, start_at=path.join(config.DATA_DIR, "2020-01", "coronavirus-tweet-id-2020-01-26-14.jsonl.gz"))
+    create_tweet_graph(graph, start_at=path.join(config.DATA_DIR, "2020-01", "coronavirus-tweet-id-2020-01-28-02.jsonl.gz"))
 
