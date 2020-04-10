@@ -1,7 +1,24 @@
-import botometer
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+"""Botometer bot detection to neo4j
+
+This script infers information about twitter users in a neo4j database by calling
+the Botometer API.
+
+This script requires that a neo4j graph database be running where there is a node type
+User. This script will take all users which do not have the property cap_english
+(complete automation probability) and have posted a certain number of tweets (4),
+and will query the API on these users. It will then write the resulting properties
+to the node in the graph.
+"""
 import json
+from requests.exceptions import HTTPError
+
+import botometer
 from tweepy.error import TweepError
-from py2neo import Graph, Node, Relationship, cypher_escape
+from py2neo import Graph, cypher_escape
+from tqdm import tqdm
 
 def get_bot_info(graph):
     with open("twitter_auth.json") as f:
@@ -10,15 +27,14 @@ def get_bot_info(graph):
                               **twitter_app_auth)
 
     # All users who tweeted more than once
-    for user in graph.run("""MATCH (n:User) WHERE n.cap_english IS NULL 
-                WITH n MATCH p=(n)-[r:POSTS]->()
-                WITH count(r) as cntr, n
-                WHERE cntr>1
-                RETURN n"""):
+    for user in tqdm(graph.run("""MATCH (n:User)
+                            WHERE n.cap_english IS NULL AND size((n)-[:POSTS]->()) > 4
+                            RETURN n""")):
+        user = user['n']
         try:
             api_result = bom.check_account(user['screen_name'])
-        except TweepError as e:
-            print(e)
+        except (TweepError, HTTPError) as e:
+            raise(e)
             continue
         # cat_ are judgements based on certain categories
         # bot_score is judgement based on all categories
@@ -36,6 +52,8 @@ def get_bot_info(graph):
         print(f"{user['screen_name']} bot likelihood: {user['cap_english']}")
         push_subgraph(graph, user)
 
+
+
 def push_subgraph(graph, subgraph):
     with graph.begin() as tx:
         graph = tx.graph
@@ -49,12 +67,9 @@ def push_subgraph(graph, subgraph):
                 new_labels = node._labels - node._remote_labels
                 if new_labels:
                     clauses.append("SET _:%s" % ":".join(map(cypher_escape, new_labels)))
-                tx.run("\n".join(clauses), parameters)
-        for relationship in subgraph.relationships:
-            if relationship.graph is graph:
-                clauses = ["MATCH ()-[_]->() WHERE id(_) = $x", "SET _ = $y"]
-                parameters = {"x": relationship.identity, "y": dict(relationship)}
-                tx.run("\n".join(clauses), parameters)
+                clauses.append("RETURN (_)")
+                k = tx.run("\n".join(clauses), parameters)
+                print(k.next())
 
 
 if __name__ == "__main__":
